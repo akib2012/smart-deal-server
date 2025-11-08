@@ -1,17 +1,63 @@
 const express = require('express')
 const app = express()
+const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
 require('dotenv').config()
 const port = 3000
 
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./smart-delas-firebase-adminsdk-fbsvc-3d94959177.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+
 // middleware
 app.use(cors());
 app.use(express.json());
 require('dotenv').config();
+const logger = (req,res,next) => {
+  console.log("logger informations her")
+  next();
+}
 
-// const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.exfto5h.mongodb.net/?appName=Cluster0`;
-// const uri = "mongodb+srv://smartdeals-02:fBFxGrBeZQMkElNe@cluster0.exfto5h.mongodb.net/?appName=Cluster0";
+const verifyfirebasetoken = async(req, res, next) => {
+
+  console.log(req.headers.authorization);
+  if(!req.headers.authorization){
+  
+
+    return res.status(400).send({message: 'unathorized access is not define'})
+  }
+  const tokern = req.headers.authorization.split(' ')[1];
+  if(!tokern){
+    return res.status(401).send({message: 'unauthorized acces is define '})
+  }
+
+  try{
+     await admin.auth().verifyIdToken(tokern)
+    return res.status(401).send({message: 'unauthorized acces is define '})
+
+
+    next();
+
+  }
+  catch{
+
+  }
+
+  /* verify token here */
+
+
+
+  next();
+}
+
+
+
 const uri = `mongodb+srv://${encodeURIComponent(process.env.DB_USER)}:${encodeURIComponent(process.env.DB_PASSWORD)}@cluster0.exfto5h.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -30,6 +76,15 @@ async function run() {
     const productscollections = db.collection('products');
     const bidscollections = db.collection('bids02');
     const userscollections = db.collection('users');
+
+
+
+    /* jwt releted api here */
+    app.post('/gettoken', (req, res) => {
+      jwt.sign({data: 'foobar'}, process.env.JWT_SECRET, { expiresIn: '1h' });
+      res.send({token: token})
+    })
+
 
 
     /* users apis here  */
@@ -135,8 +190,9 @@ async function run() {
     /* bids get here */
 
     app.get('/bids02', async(req, res) => {
-
+     
       const email = req.query.email;
+      
       const  query = {}
       if(email){
         query.buyer_email = email
@@ -175,9 +231,11 @@ async function run() {
 
      //  find my bid with query: 
 
-     app.get('/bids', async(req,res) => {
-      // const cursor = bidscollections.find();
+     app.get('/bids',logger, verifyfirebasetoken,  async(req,res) => {
+     
+      // console.log('Full headers:', req.headers);
       const email = req.query.email;
+    
       const query = {};
       if(email){
         query.bhuyer_emai= email
